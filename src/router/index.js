@@ -36,7 +36,6 @@ const routes = [
   {
     path: '/:pathMatch(.*)*',
     name: 'NotFoundPage',
-     // No meta requirements = accessible to all
     component: () => import('../views/NotFound.vue')
   }
 ]
@@ -45,29 +44,5 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL || '/'),
   routes
 })
-
-// Navigation guards
-// router.beforeEach(async (to, from, next) => {
-//   // Check if user is authenticated
-//   const isAuthenticated = store.getters['auth/isAuthenticated']
-  
-//   // If not authenticated and no user in store, try to fetch user
-//   if (!isAuthenticated && !store.getters['auth/user']) {
-//     try {
-//       await store.dispatch('auth/fetchUser')
-//     } catch (error) {
-//       console.log('No authenticated user found')
-//     }
-//   }
-
-  // // Handle route guards
-  // if (to.meta.requiresAuth && !store.getters['auth/isAuthenticated']) {
-  //   next('/login')
-  // } else if (to.meta.requiresGuest && store.getters['auth/isAuthenticated']) {
-  //   next('/')
-  // } else {
-  //   next()
-  // }
-// })
 
 export default router
