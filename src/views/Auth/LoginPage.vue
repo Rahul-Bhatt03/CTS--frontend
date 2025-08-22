@@ -220,6 +220,8 @@
                   </div>
                 </v-alert>
 
+            <!--    issue resolved-->
+
                 <!-- Support Contact -->
                 <div class="text-center">
                   <p style="color: #6b7280; font-size: 12px;">
