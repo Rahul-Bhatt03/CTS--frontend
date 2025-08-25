@@ -11,6 +11,7 @@ import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 import 'vuetify/styles' // Global CSS has to be imported
 import '@mdi/font/css/materialdesignicons.css' // Ensure you are using css-loader
+import {createPinia} from 'pinia'
 
 const vuetify = createVuetify({
   components,
@@ -18,8 +19,10 @@ const vuetify = createVuetify({
 })
 
 const app = createApp(App)
+const pinia=createPinia()
 
 app.use(store)
+app.use(pinia)
 app.use(router)
 app.use(vuetify) // Add this line
 
