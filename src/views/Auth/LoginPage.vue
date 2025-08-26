@@ -116,10 +116,11 @@
                 </div>
 
                 <!-- Login Form -->
-                <v-form @submit.prevent="handleLogin" ref="form">
+                <v-form @submit.prevent="login" ref="loginForm" v-model="isFormValid">
                   <!-- Email Field -->
                   <v-text-field
                     v-model="form.email"
+                    @input="clearError"
                     label="Corporate Email"
                     type="email"
                     placeholder="first.last@cts.com"
@@ -130,11 +131,14 @@
                     :rules="emailRules"
                     hide-details="auto"
                     density="comfortable"
+                    :disabled="isLoading"
+                    required
                   ></v-text-field>
 
                   <!-- Password Field -->
                   <v-text-field
                     v-model="form.password"
+                    @input="clearError"
                     label="Password"
                     :type="showPassword ? 'text' : 'password'"
                     placeholder="Enter your password"
@@ -147,6 +151,8 @@
                     :rules="passwordRules"
                     hide-details="auto"
                     density="comfortable"
+                    :disabled="isLoading"
+                    required
                   ></v-text-field>
                   
                   <!-- Forgot Password Link -->
@@ -157,6 +163,7 @@
                       size="small"
                       class="pa-0"
                       style="text-transform: none;"
+                      :disabled="isLoading"
                     >
                       Forgot password?
                     </v-btn>
@@ -169,25 +176,17 @@
                     density="compact"
                     class="mb-4"
                     rounded="lg"
+                    closable
+                    @click:close="clearError"
                   >
                     {{ errorMessage }}
                   </v-alert>
-
-                  <!-- Remember Me -->
-                  <v-checkbox
-                    v-model="form.rememberMe"
-                    label="Remember this device"
-                    color="blue-darken-1"
-                    class="mb-4"
-                    hide-details
-                    density="compact"
-                  ></v-checkbox>
 
                   <!-- Submit Button -->
                   <v-btn
                     type="submit"
                     :loading="isLoading"
-                    :disabled="isLoading"
+                    :disabled="isLoading || !isFormValid || isSubmitting"
                     color="blue-darken-1"
                     size="large"
                     block
@@ -234,6 +233,18 @@
                     <span style="font-family: monospace;">+1 (555) 123-HELP</span>
                   </p>
                 </div>
+
+                <!-- Debug Info (Remove in production) -->
+                <div class="mt-4 pa-3" style="background: #f1f5f9; border-radius: 8px; font-size: 12px;">
+                  <strong>Debug Info:</strong><br>
+                  Email: {{ form.email }}<br>
+                  Password: {{ form.password ? '***' : 'empty' }}<br>
+                  Form Valid: {{ isFormValid }}<br>
+                  Loading: {{ isLoading }}<br>
+                  Submitting: {{ isSubmitting }}<br>
+                  Error: {{ errorMessage }}<br>
+                  Login Attempts: {{ loginAttempts }}
+                </div>
               </v-card>
             </div>
           </v-col>
@@ -244,10 +255,12 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 
 const router = useRouter()
+const store = useStore()
 
 const form = reactive({
   email: '',
@@ -255,9 +268,15 @@ const form = reactive({
   rememberMe: false
 })
 
-const isLoading = ref(false)
-const errorMessage = ref('')
+const isFormValid = ref(false)
 const showPassword = ref(false)
+const loginForm = ref(null)
+const isSubmitting = ref(false) // Local submitting state
+const loginAttempts = ref(0) // Debug counter
+
+// Computed properties from store (with fallbacks)
+const isLoading = computed(() => store.state.auth?.loading || false)
+const errorMessage = computed(() => store.state.auth?.error || null)
 
 // Validation rules
 const emailRules = [
@@ -267,37 +286,103 @@ const emailRules = [
 
 const passwordRules = [
   v => !!v || 'Password is required',
+  v => (v && v.length >= 6) || 'Password must be at least 6 characters',
 ]
 
-const handleLogin = async () => {
-  errorMessage.value = ''
+// Clear error when user starts typing
+const clearError = () => {
+  if (errorMessage.value && store.commit) {
+    store.commit('auth/SET_ERROR', null)
+  }
+}
+
+// Watch for loading state changes to reset submitting
+watch(isLoading, (newValue) => {
+  if (!newValue) {
+    isSubmitting.value = false
+  }
+})
+
+const login = async () => {
+  console.log('Login attempt started')
+  loginAttempts.value += 1
   
-  if (!form.email || !form.password) {
-    errorMessage.value = 'Please enter your corporate credentials.'
+  // Prevent multiple simultaneous submissions
+  if (isSubmitting.value || isLoading.value) {
+    console.log('Login already in progress, ignoring duplicate request')
     return
   }
 
-  isLoading.value = true
-
+  isSubmitting.value = true
+  
   try {
-    console.log('CTS Login attempt:', form.email)
-    await new Promise(resolve => setTimeout(resolve, 1200))
+    console.log('Form data:', { email: form.email, password: form.password })
+
+    // Clear previous errors
+    if (store.commit) {
+      store.commit('auth/SET_ERROR', null)
+    }
+
+    // Validate form
+    if (loginForm.value) {
+      const { valid } = await loginForm.value.validate()
+      if (!valid) {
+        console.log('Form validation failed')
+        return
+      }
+    }
+
+    // Basic validation fallback
+    if (!form.email || !form.password) {
+      const error = 'Please enter both email and password'
+      console.log('Basic validation failed:', error)
+      if (store.commit) {
+        store.commit('auth/SET_ERROR', error)
+      }
+      return
+    }
+
+    console.log('Dispatching login action...')
     
-    // Simulate corporate domain validation
-    if (!form.email.endsWith('@cts.com')) {
-      throw new Error('Invalid corporate email domain')
+    // Check if store and auth module exist
+    if (!store.dispatch) {
+      throw new Error('Vuex store not properly configured')
+    }
+
+    // Dispatch login action
+    const result = await store.dispatch('auth/login', {
+      email: form.email,
+      password: form.password
+    })
+
+    // Only redirect if login was successful
+    if (result && result.success) {
+      console.log('Login successful, redirecting...')
+      await router.push('/')
     }
     
-    // Replace with your actual router navigation
-    // router.push('/dashboard')
-    alert('Login successful! (Replace this with router.push)')
-  } catch (error) {
-    errorMessage.value = error.message || 'Authentication failed. Please try again.'
-    console.error('Login error:', error)
+  } catch (err) {
+    console.error('Login failed:', err)
+    // Error is already handled by the store action
+    // Just ensure the error is displayed
+    if (!store.commit) {
+      alert(`Login failed: ${err.message || 'Unknown error'}`)
+    }
   } finally {
-    isLoading.value = false
+    // Always reset submitting state
+    isSubmitting.value = false
   }
 }
+
+// Test function for debugging
+const testLogin = () => {
+  form.email = 'test@cts.com'
+  form.password = 'password123'
+  console.log('Test credentials set')
+}
+
+// Expose test function for debugging
+window.testLogin = testLogin
 </script>
 
 <style scoped>
